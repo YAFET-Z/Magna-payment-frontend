@@ -16,7 +16,7 @@ import ManageExpenseScreen from './screens/ManageExpenseScreen';
 import ManageEventScreen from './screens/ManageEventScreen';
 import ManagerWageSettlementScreen from './screens/ManagerWageSettlementScreen'; 
 import ManagerWorkerPayrollScreen from './screens/ManagerWorkerPayrollScreen';
-import WorkerHistoryScreen from './screens/WorkerHistoryScreen'; // <-- Added
+import WorkerHistoryScreen from './screens/WorkerHistoryScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -33,7 +33,7 @@ export type RootStackParamList = {
   ManageEvent: { event: any; userId: string };
   ManagerWageSettlement: { eventId: string; eventName: string; workerName: string; totalAmount: number; bankAccount: string | null; telebirr: string | null; days: number; wageRate: number };
   ManagerWorkerPayroll: { workerId: string; workerName: string; events: any[]; dailyWage: number; bankAccount: string | null; telebirr: string | null };
-  WorkerHistory: { userId: string }; // <-- Added Route
+  WorkerHistory: { userId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

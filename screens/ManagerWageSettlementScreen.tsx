@@ -7,11 +7,11 @@ import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 
 type Props = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'ManagerWageSettlement'>;
+  navigation: NativeStackNavigationProp<RootStackParamList, 'ManagerWagesSettlement'>;
   route: { params: { eventId: string; eventName: string; workerName: string; totalAmount: number; bankAccount: string | null; telebirr: string | null; days: number; wageRate: number } };
 };
 
-export default function ManagerWageSettlementScreen({ navigation, route }: Props) {
+export default function ManagerWagesSettlementScreen({ navigation, route }: Props) {
   const { eventId, eventName, workerName, totalAmount, bankAccount, telebirr, days, wageRate } = route.params;
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export default function ManagerWageSettlementScreen({ navigation, route }: Props
 
     setIsLoading(true);
     try {
-      await axios.put(`https://magna-payments-api.onrender.com/api/finance/settle-wage/${eventId}`, {
+      await axios.put(`https://magna-payment-api.onrender.com/api/finance/settle-wage/${eventId}`, {
         wageSettlementBase64: imageBase64 
       });
       Alert.alert('Success', `Payroll for ${eventName} has been settled.`);

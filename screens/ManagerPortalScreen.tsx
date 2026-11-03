@@ -9,33 +9,22 @@ type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Manage
 
 export default function ManagerPortalScreen({ navigation }: Props) {
   const [activeTab, setActiveTab] = useState<'EXPENSES' | 'WAGES' | 'WORKERS'>('EXPENSES');
-  const [expenseTotal, setExpenseTotal] = useState(0);
   const [expenseWorkers, setExpenseWorkers] = useState([]);
   const [wageWorkers, setWageWorkers] = useState([]);
   const [allWorkers, setAllWorkers] = useState([]);
-  const [wageTotal, setWageTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       setIsLoading(true);
       Promise.all([
-        axios.get('https://magna-payments-api.onrender.com/api/finance/company-pending-expenses'), // Make sure this matches your Render URL exactly
-        axios.get('https://magna-payments-api.onrender.com/api/finance/company-pending-wages'),
-        axios.get('https://magna-payments-api.onrender.com/api/finance/all-workers')
+        axios.get('https://magna-payment-api.onrender.com/api/finance/company-pending-expenses'), 
+        axios.get('https://magna-payment-api.onrender.com/api/finance/company-pending-wages'),
+        axios.get('https://magna-payment-api.onrender.com/api/finance/all-workers')
       ])
       .then(([expRes, wageRes, allRes]) => {
-        setExpenseTotal(expRes.data.totalCompanyPending || 0);
         setExpenseWorkers(expRes.data.actionNeeded || []);
-        
-        const wWorkers = wageRes.data || [];
-        setWageWorkers(wWorkers);
-        
-        const totalW = wWorkers.reduce((sum: number, worker: any) => {
-           return sum + worker.events.reduce((eSum: number, ev: any) => eSum + (ev.totalDaysWorked * worker.dailyWage), 0);
-        }, 0);
-        setWageTotal(totalW);
-
+        setWageWorkers(wageRes.data || []);
         setAllWorkers(allRes.data || []);
       })
       .catch(err => console.log('Fetch Error:', err.message))
@@ -131,16 +120,20 @@ export default function ManagerPortalScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* NEW: GROUPED OUTSTANDING SUMMARY */}
-      <Text style={styles.sectionLabel}>OUTSTANDING SUMMARY</Text>
+      {/* UPDATED: GROUPED ACTION SUMMARY */}
+      <Text style={styles.sectionLabel}>ACTION REQUIRED</Text>
       <View style={styles.summaryRow}>
         <View style={styles.summaryBox}>
           <Text style={styles.summaryLabel}>Pending Expenses</Text>
-          <Text style={styles.summaryAmount}>{expenseTotal.toLocaleString()} <Text style={styles.currencyTextSmall}>Birr</Text></Text>
+          <Text style={styles.summaryAmount}>
+            {expenseWorkers.length} <Text style={styles.currencyTextSmall}>{expenseWorkers.length === 1 ? 'Worker' : 'Workers'}</Text>
+          </Text>
         </View>
         <View style={styles.summaryBox}>
           <Text style={styles.summaryLabel}>Unpaid Payroll</Text>
-          <Text style={styles.summaryAmount}>{wageTotal.toLocaleString()} <Text style={styles.currencyTextSmall}>Birr</Text></Text>
+          <Text style={styles.summaryAmount}>
+            {wageWorkers.length} <Text style={styles.currencyTextSmall}>{wageWorkers.length === 1 ? 'Worker' : 'Workers'}</Text>
+          </Text>
         </View>
       </View>
 
@@ -192,7 +185,6 @@ const styles = StyleSheet.create({
 
   sectionLabel: { color: '#888', fontSize: 10, letterSpacing: 1.5, marginBottom: 5, fontWeight: 'bold' },
   
-  /* NEW SUMMARY STYLES */
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 25, gap: 10 },
   summaryBox: { flex: 1, backgroundColor: '#1A1A1A', padding: 15, borderRadius: 10, borderWidth: 1, borderColor: '#222' },
   summaryLabel: { color: '#888', fontSize: 11, fontWeight: 'bold', marginBottom: 5 },

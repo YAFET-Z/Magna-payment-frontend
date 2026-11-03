@@ -13,14 +13,14 @@ type Props = {
 export default function ManagerWorkerReviewScreen({ navigation, route }: Props) {
   const { workerId, workerName, totalAmount } = route.params;
   
-  // NEW: State for Tabs
-  const [activeTab, setActiveTab] = useState<'PENDING' | 'HISTORY_EXPENSES' | 'HISTORY_EVENTS'>('PENDING');
+  // SAFETY FIX: If a worker has no balance history, default to 0 to prevent the crash
+  const safeTotalAmount = totalAmount || 0;
   
+  const [activeTab, setActiveTab] = useState<'PENDING' | 'HISTORY_EXPENSES' | 'HISTORY_EVENTS'>('PENDING');
   const [pendingExpenses, setPendingExpenses] = useState([]);
   const [monthlyExpenseHistory, setMonthlyExpenseHistory] = useState<any>({});
-  const [monthlyEventHistory, setMonthlyEventHistory] = useState<any>({}); // NEW: Settled Events (Wages)
+  const [monthlyEventHistory, setMonthlyEventHistory] = useState<any>({});
   const [dailyWage, setDailyWage] = useState(0);
-  
   const [bankAccount, setBankAccount] = useState<string | null>(null);
   const [telebirr, setTelebirr] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,19 +29,15 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       setIsLoading(true);
-      
-      // Fetch Expenses & Events simultaneously
       Promise.all([
-        axios.get(`https://magna-payments-api.onrender.com/api/expenses/worker/${workerId}`),
-        axios.get(`https://magna-payments-api.onrender.com/api/worker/dashboard/${workerId}`) // Reusing this to grab event data
+        axios.get(`https://magna-payment-api.onrender.com/api/expenses/worker/${workerId}`),
+        axios.get(`https://magna-payment-api.onrender.com/api/worker/dashboard/${workerId}`) 
       ])
       .then(([expenseRes, dashboardRes]) => {
-        const allExpenses = expenseRes.data.expenses;
+        const allExpenses = expenseRes.data.expenses || [];
         
-        // 1. Separate Pending Expenses
         setPendingExpenses(allExpenses.filter((e: any) => e.status === 'PENDING'));
         
-        // 2. Group Settled Expenses by Month
         const settledExps = allExpenses.filter((e: any) => e.status === 'SETTLED');
         const groupedExps = settledExps.reduce((acc: any, curr: any) => {
           const date = new Date(curr.createdAt);
@@ -53,9 +49,9 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
         }, {});
         setMonthlyExpenseHistory(groupedExps);
 
-        // 3. Group Settled Events (Wages) by Month
-        const wageRate = dashboardRes.data.worker.dailyWage || 0;
+        const wageRate = dashboardRes.data.worker?.dailyWage || 0;
         setDailyWage(wageRate);
+        
         const settledEvents = (dashboardRes.data.completedEvents || []).filter((ev: any) => ev.wageStatus === 'SETTLED');
         const groupedEvents = settledEvents.reduce((acc: any, curr: any) => {
           const date = new Date(curr.endDate);
@@ -77,8 +73,8 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
   }, [navigation, workerId]);
 
   const handleGoToSettlement = () => {
-    if (totalAmount <= 0) return Alert.alert('Notice', 'No pending balance to settle.');
-    navigation.navigate('ManagerSettlement', { workerId, workerName, totalAmount, bankAccount, telebirr });
+    if (safeTotalAmount <= 0) return Alert.alert('Notice', 'No pending balance to settle.');
+    navigation.navigate('ManagerSettlement', { workerId, workerName, totalAmount: safeTotalAmount, bankAccount, telebirr });
   };
 
   const renderExpenseItem = (item: any, isSettled: boolean = false) => (
@@ -148,11 +144,10 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerName} numberOfLines={1}>{workerName}'s Record</Text>
-          <Text style={styles.headerSubtext}>{totalAmount.toLocaleString()} Birr pending</Text>
+          <Text style={styles.headerSubtext}>{safeTotalAmount.toLocaleString()} Birr pending</Text>
         </View>
       </View>
 
-      {/* NEW: Side-by-Side Tab Toggle */}
       <View style={styles.tabContainer}>
         <TouchableOpacity style={[styles.tabBtn, activeTab === 'PENDING' && styles.tabActive]} onPress={() => setActiveTab('PENDING')}>
           <Text style={[styles.tabText, activeTab === 'PENDING' && styles.tabTextActive]}>Pending ({pendingExpenses.length})</Text>
@@ -167,7 +162,6 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
         
-        {/* VIEW: PENDING EXPENSES */}
         {activeTab === 'PENDING' && (
           <>
             <View style={styles.sectionHeader}>
@@ -183,7 +177,6 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
           </>
         )}
 
-        {/* VIEW: SETTLED EXPENSE HISTORY */}
         {activeTab === 'HISTORY_EXPENSES' && (
           <>
             {Object.keys(monthlyExpenseHistory).length === 0 ? (
@@ -204,7 +197,6 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
           </>
         )}
 
-        {/* VIEW: SETTLED EVENTS (WAGE) HISTORY */}
         {activeTab === 'HISTORY_EVENTS' && (
           <>
             {Object.keys(monthlyEventHistory).length === 0 ? (
@@ -227,17 +219,15 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
 
       </ScrollView>
 
-      {/* FIXED SETTLEMENT BUTTON (Only visible on Pending tab) */}
       {activeTab === 'PENDING' && pendingExpenses.length > 0 && (
         <View style={styles.footer}>
           <TouchableOpacity style={styles.settleBtn} onPress={handleGoToSettlement}>
             <Text style={styles.settleBtnText}>Settle {pendingExpenses.length} Receipts</Text>
-            <Text style={styles.settleBtnAmount}>{totalAmount.toLocaleString()} Birr</Text>
+            <Text style={styles.settleBtnAmount}>{safeTotalAmount.toLocaleString()} Birr</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* FULL SCREEN IMAGE MODAL */}
       <Modal visible={!!selectedImage} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
           <TouchableOpacity style={styles.closeModalBtn} onPress={() => setSelectedImage(null)}>

@@ -40,7 +40,7 @@ export default function ManagerWorkerPayrollScreen({ navigation, route }: Props)
     if (!result.canceled && result.assets[0].base64) {
       setIsUploading(true);
       try {
-        await axios.put('https://magna-payments-api.onrender.com/api/finance/settle-wages-bulk', {
+        await axios.put('https://magna-payment-api.onrender.com/api/finance/settle-wages-bulk', {
           eventIds: selectedEventIds,
           wageSettlementBase64: result.assets[0].base64
         });
@@ -65,6 +65,7 @@ export default function ManagerWorkerPayrollScreen({ navigation, route }: Props)
         onPress={() => {
           if (isBulkMode) toggleEventSelection(event.id);
           else {
+            // FIXED: Removed the 's' in 'ManagerWageSettlement'
             navigation.navigate('ManagerWageSettlement', { 
               eventId: event.id, eventName: event.eventName, workerName, 
               totalAmount: eventAmount, bankAccount, telebirr, 
@@ -116,7 +117,6 @@ export default function ManagerWorkerPayrollScreen({ navigation, route }: Props)
 
         <View style={styles.sectionHeader}>
           <Text style={styles.label}>PENDING WAGE SETTLEMENTS</Text>
-          {/* NEW: Bulk Toggle Button */}
           <TouchableOpacity style={styles.toggleBulkBtn} onPress={() => { setIsBulkMode(!isBulkMode); setSelectedEventIds([]); }}>
             <Text style={styles.toggleBulkText}>{isBulkMode ? "Cancel Selection" : "Select Multiple"}</Text>
           </TouchableOpacity>
@@ -124,7 +124,6 @@ export default function ManagerWorkerPayrollScreen({ navigation, route }: Props)
         
         {events.map((ev) => renderEventCard(ev))}
 
-        {/* NEW: Bulk Settle Execution Button */}
         {isBulkMode && selectedEventIds.length > 0 && (
           <TouchableOpacity style={styles.bulkSubmitBtn} onPress={handleBulkSettle} disabled={isUploading}>
             {isUploading ? <ActivityIndicator color="#000" /> : <Text style={styles.bulkSubmitBtnText}>Settle {selectedEventIds.length} Selected</Text>}
