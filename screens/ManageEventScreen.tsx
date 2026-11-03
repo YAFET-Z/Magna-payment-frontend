@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
+import CustomAlert from '../components/CustomAlert';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ManageEvent'>;
@@ -16,30 +17,48 @@ export default function ManageEventScreen({ navigation, route }: Props) {
   const [workerRole, setWorkerRole] = useState(event.workerRole);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Custom Alert State
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false, title: '', message: '', type: 'success' as 'success'|'error'|'confirm',
+    onConfirm: () => hideAlert(), onCancel: () => hideAlert()
+  });
+  const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
+
   const isSettled = event.wageStatus === 'SETTLED';
 
   const handleUpdate = async () => {
     setIsLoading(true);
     try {
       await axios.put(`https://magna-payment-api.onrender.com/api/events/${event.id}`, { eventName, workerRole });
-      Alert.alert('Updated', 'Event details saved.');
-      navigation.goBack();
-    } catch (error: any) { Alert.alert('Error', 'Could not update.'); } 
+      setAlertConfig({
+        visible: true, title: 'Updated', message: 'Event details saved.', type: 'success',
+        onConfirm: () => { hideAlert(); navigation.goBack(); }
+      });
+    } catch (error: any) { 
+      setAlertConfig({ visible: true, title: 'Error', message: 'Could not update.', type: 'error', onConfirm: hideAlert });
+    } 
     finally { setIsLoading(false); }
   };
 
-  const handleDelete = () => {
-    Alert.alert("Delete Event", "This will permanently delete the event AND all expenses inside it.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete Everything", style: "destructive", onPress: async () => {
-          setIsLoading(true);
-          try {
-            await axios.delete(`https://magna-payment-api.onrender.com/api/events/${event.id}`);
-            navigation.goBack();
-          } catch (err) { Alert.alert('Error', 'Could not delete.'); setIsLoading(false); }
+  const promptDelete = () => {
+    setAlertConfig({
+      visible: true,
+      title: 'Delete Event',
+      message: 'This will permanently delete the event AND all expenses inside it.',
+      type: 'confirm',
+      onCancel: hideAlert,
+      onConfirm: async () => {
+        hideAlert();
+        setIsLoading(true);
+        try {
+          await axios.delete(`https://magna-payment-api.onrender.com/api/events/${event.id}`);
+          navigation.goBack();
+        } catch (err) { 
+          setTimeout(() => setAlertConfig({ visible: true, title: 'Error', message: 'Could not delete.', type: 'error', onConfirm: hideAlert }), 500);
+          setIsLoading(false); 
         }
       }
-    ]);
+    });
   };
 
   const renderExpenseRow = (exp: any) => (
@@ -60,7 +79,14 @@ export default function ManageEventScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={{ padding: 25, paddingBottom: 60 }}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back-ios" size={14} color="#888" />
+          <Text style={styles.backText}>Back</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 25, paddingBottom: 60 }}>
         <Text style={styles.title}>Event Details</Text>
         <Text style={styles.subtitle}>{event.totalDaysWorked} Days Logged</Text>
 
@@ -73,7 +99,7 @@ export default function ManageEventScreen({ navigation, route }: Props) {
         {!isSettled ? (
           <View style={styles.btnRow}>
             <TouchableOpacity style={styles.updateBtn} onPress={handleUpdate} disabled={isLoading}><Text style={styles.updateBtnText}>Save</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} disabled={isLoading}><MaterialIcons name="delete" size={24} color="#FF3B30" /></TouchableOpacity>
+            <TouchableOpacity style={styles.deleteBtn} onPress={promptDelete} disabled={isLoading}><MaterialIcons name="delete" size={24} color="#FF3B30" /></TouchableOpacity>
           </View>
         ) : (
           <View style={styles.settledBadge}><Text style={styles.settledText}>Wages for this event are PAID. Event is locked.</Text></View>
@@ -84,12 +110,26 @@ export default function ManageEventScreen({ navigation, route }: Props) {
           {event.expenses.map((exp: any) => renderExpenseRow(exp))}
         </View>
       </ScrollView>
+
+      {/* Custom Alert Mounted Here */}
+      <CustomAlert 
+        visible={alertConfig.visible} 
+        title={alertConfig.title} 
+        message={alertConfig.message} 
+        type={alertConfig.type} 
+        onConfirm={alertConfig.onConfirm} 
+        onCancel={alertConfig.onCancel}
+        confirmText={alertConfig.type === 'confirm' ? "Delete Everything" : "OK"}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0D0D0D' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 25, paddingTop: 50 },
+  backBtn: { flexDirection: 'row', alignItems: 'center' },
+  backText: { color: '#888', fontSize: 12, marginLeft: 4, fontWeight: 'bold' },
   title: { color: '#FFF', fontSize: 32, fontWeight: 'bold' },
   subtitle: { color: '#888', fontSize: 14, marginBottom: 30 },
   label: { color: '#888', fontSize: 10, letterSpacing: 1.5, marginBottom: 10, fontWeight: 'bold' },

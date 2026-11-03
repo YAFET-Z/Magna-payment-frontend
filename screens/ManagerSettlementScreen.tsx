@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Image, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Image, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
+import CustomAlert from '../components/CustomAlert';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ManagerSettlement'>;
@@ -16,6 +17,12 @@ export default function ManagerSettlementScreen({ navigation, route }: Props) {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false, title: '', message: '', type: 'success' as 'success'|'error',
+    onConfirm: () => hideAlert()
+  });
+  const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
 
   const handleImagePick = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -31,19 +38,24 @@ export default function ManagerSettlementScreen({ navigation, route }: Props) {
   };
 
   const submitSettlement = async () => {
-    if (!imageBase64) return Alert.alert('Missing File', 'Please attach the proof of payment receipt.');
+    if (!imageBase64) {
+      return setAlertConfig({ visible: true, title: 'Missing File', message: 'Please attach the proof of payment receipt.', type: 'error', onConfirm: hideAlert });
+    }
 
     setIsLoading(true);
     try {
       await axios.put(`https://magna-payment-api.onrender.com/api/expenses/settle/${workerId}`, {
         settlementReceiptBase64: imageBase64 
       });
-      Alert.alert('Success', `${workerName}'s balance has been settled.`);
-      
-      // Go back to Manager Portal
-      navigation.reset({ index: 0, routes: [{ name: 'Login' }, { name: 'ManagerPortal', params: { adminId: 'manager' } }] });
+      setAlertConfig({
+        visible: true, title: 'Success', message: `${workerName}'s balance has been settled.`, type: 'success',
+        onConfirm: () => {
+          hideAlert();
+          navigation.reset({ index: 0, routes: [{ name: 'Login' }, { name: 'ManagerPortal', params: { adminId: 'manager' } }] });
+        }
+      });
     } catch (error: any) {
-      Alert.alert('Upload Failed', error.response?.data?.error || 'Server error.');
+      setAlertConfig({ visible: true, title: 'Upload Failed', message: error.response?.data?.error || 'Server error.', type: 'error', onConfirm: hideAlert });
     } finally {
       setIsLoading(false);
     }
@@ -92,6 +104,14 @@ export default function ManagerSettlementScreen({ navigation, route }: Props) {
           {isLoading ? <ActivityIndicator color="#000" /> : <Text style={styles.submitBtnText}>Confirm Settlement</Text>}
         </TouchableOpacity>
       </ScrollView>
+
+      <CustomAlert 
+        visible={alertConfig.visible} 
+        title={alertConfig.title} 
+        message={alertConfig.message} 
+        type={alertConfig.type} 
+        onConfirm={alertConfig.onConfirm} 
+      />
     </View>
   );
 }

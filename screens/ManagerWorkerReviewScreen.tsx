@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Image, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -13,7 +13,6 @@ type Props = {
 export default function ManagerWorkerReviewScreen({ navigation, route }: Props) {
   const { workerId, workerName, totalAmount } = route.params;
   
-  // SAFETY FIX: If a worker has no balance history, default to 0 to prevent the crash
   const safeTotalAmount = totalAmount || 0;
   
   const [activeTab, setActiveTab] = useState<'PENDING' | 'HISTORY_EXPENSES' | 'HISTORY_EVENTS'>('PENDING');
@@ -77,8 +76,13 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
     navigation.navigate('ManagerSettlement', { workerId, workerName, totalAmount: safeTotalAmount, bankAccount, telebirr });
   };
 
+  // UPDATED: Now navigates directly to ManageExpenseScreen for detail viewing
   const renderExpenseItem = (item: any, isSettled: boolean = false) => (
-    <View key={item.id} style={styles.listRow}>
+    <TouchableOpacity 
+      key={item.id} 
+      style={styles.listRow}
+      onPress={() => navigation.navigate('ManageExpense', { expense: item, userId: workerId })}
+    >
       <View style={styles.listLeft}>
         <View style={styles.iconBox}>
           <MaterialIcons name={item.expenseType === 'MEAL' ? 'restaurant' : 'directions-car'} size={18} color="#CCFF00" />
@@ -90,22 +94,9 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
       </View>
       <View style={styles.listRight}>
         <Text style={styles.listAmount}>{item.amount} Birr</Text>
-        <View style={{ flexDirection: 'row', marginTop: 4 }}>
-          {item.receiptImageUrl && item.receiptImageUrl.startsWith('http') && (
-            <TouchableOpacity onPress={() => setSelectedImage(item.receiptImageUrl)} style={styles.receiptBtn}>
-               <MaterialIcons name="receipt" size={12} color="#000" />
-               <Text style={styles.receiptBtnText}>Receipt</Text>
-            </TouchableOpacity>
-          )}
-          {isSettled && item.settlementReceiptUrl && (
-            <TouchableOpacity onPress={() => setSelectedImage(item.settlementReceiptUrl)} style={[styles.receiptBtn, styles.paidProofBtn]}>
-               <MaterialIcons name="verified" size={12} color="#CCFF00" />
-               <Text style={[styles.receiptBtnText, { color: '#CCFF00' }]}>Paid</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <MaterialIcons name="chevron-right" size={20} color="#555" style={{ marginTop: 4 }} />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   const renderEventItem = (event: any) => {

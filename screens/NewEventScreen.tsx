@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
+import CustomAlert from '../components/CustomAlert';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'NewEvent'>;
@@ -16,19 +17,25 @@ export default function NewEventScreen({ navigation, route }: Props) {
   const [workerRole, setWorkerRole] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false, title: '', message: '', type: 'success' as 'success'|'error',
+    onConfirm: () => hideAlert()
+  });
+  const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
+
   const handleStartEvent = async () => {
-    if (!eventName || !workerRole) return Alert.alert('Required', 'Please fill in both fields.');
+    if (!eventName || !workerRole) {
+      return setAlertConfig({ visible: true, title: 'Required', message: 'Please fill in both fields.', type: 'error', onConfirm: hideAlert });
+    }
 
     setIsLoading(true);
     try {
       await axios.post('https://magna-payment-api.onrender.com/api/events/start', {
-        workerId: userId,
-        eventName,
-        workerRole
+        workerId: userId, eventName, workerRole
       });
       navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.error || 'Could not start event.');
+      setAlertConfig({ visible: true, title: 'Error', message: error.response?.data?.error || 'Could not start event.', type: 'error', onConfirm: hideAlert });
     } finally {
       setIsLoading(false);
     }
@@ -55,6 +62,14 @@ export default function NewEventScreen({ navigation, route }: Props) {
       <TouchableOpacity style={styles.submitBtn} onPress={handleStartEvent} disabled={isLoading}>
         {isLoading ? <ActivityIndicator color="#000" /> : <Text style={styles.submitBtnText}>Start Event Clock</Text>}
       </TouchableOpacity>
+
+      <CustomAlert 
+        visible={alertConfig.visible} 
+        title={alertConfig.title} 
+        message={alertConfig.message} 
+        type={alertConfig.type} 
+        onConfirm={alertConfig.onConfirm} 
+      />
     </View>
   );
 }

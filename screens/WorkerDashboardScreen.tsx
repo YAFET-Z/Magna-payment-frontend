@@ -1,9 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Modal, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import CustomAlert from '../components/CustomAlert';
+
+// Handle notifications dynamically while app is open
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
+});
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'WorkerDashboard'>;
@@ -13,7 +21,13 @@ type Props = {
 export default function WorkerDashboardScreen({ navigation, route }: Props) {
   const { userId } = route.params;
   const [data, setData] = useState<any>(null);
-  const [selectedProof, setSelectedProof] = useState<string | null>(null);
+
+  // NEW: Custom Alert State for Confirmations
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false, title: '', message: '', type: 'success' as 'success'|'error'|'confirm',
+    onConfirm: () => hideAlert(), onCancel: () => hideAlert()
+  });
+  const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
 
   const fetchDashboard = () => {
     axios.get(`https://magna-payment-api.onrender.com/api/worker/dashboard/${userId}`)
@@ -26,25 +40,52 @@ export default function WorkerDashboardScreen({ navigation, route }: Props) {
     return unsubscribe;
   }, [navigation, userId]);
 
+  // NEW: Push Notification Registration
+  useEffect(() => {
+    async function registerForPushNotificationsAsync() {
+      if (Device.isDevice) {
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        if (finalStatus !== 'granted') return;
+        
+        try {
+          const token = (await Notifications.getExpoPushTokenAsync()).data;
+          await axios.put(`https://magna-payment-api.onrender.com/api/users/push-token/${userId}`, { token });
+        } catch (e) { console.log('Failed to fetch push token'); }
+      }
+    }
+    registerForPushNotificationsAsync();
+  }, [userId]);
+
   const handleLogout = () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
 
-  const stopActiveEvent = () => {
-    Alert.alert("Stop Event?", "This will clock you out.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Confirm Stop", style: "destructive", onPress: async () => {
-          try {
-            await axios.put(`https://magna-payment-api.onrender.com/api/events/stop/${data.activeEvent.id}`);
-            fetchDashboard();
-          } catch (err) { Alert.alert('Error', 'Could not stop event'); }
+  // UPDATED: Using CustomAlert for Stop Event Confirmation
+  const promptStopEvent = () => {
+    setAlertConfig({
+      visible: true,
+      title: 'Stop Event?',
+      message: 'This will clock you out of the current shift and calculate your days.',
+      type: 'confirm',
+      onCancel: hideAlert,
+      onConfirm: async () => {
+        hideAlert();
+        try {
+          await axios.put(`https://magna-payment-api.onrender.com/api/events/stop/${data.activeEvent.id}`);
+          fetchDashboard();
+        } catch (err) {
+          setTimeout(() => setAlertConfig({ visible: true, title: 'Error', message: 'Could not stop event', type: 'error', onConfirm: hideAlert }), 500);
         }
       }
-    ]);
+    });
   };
 
   if (!data) return <View style={styles.container} />
 
   const pendingWageEvents = data.completedEvents.filter((e: any) => e.wageStatus === 'PENDING');
-  const settledWageEvents = data.completedEvents.filter((e: any) => e.wageStatus === 'SETTLED');
   const totalPendingDays = pendingWageEvents.reduce((sum: number, e: any) => sum + e.totalDaysWorked, 0);
 
   const renderExpenseItem = (item: any) => (
@@ -89,7 +130,6 @@ export default function WorkerDashboardScreen({ navigation, route }: Props) {
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
         
-        {/* COMPACT ACTIVE CONTROL PANEL WITH EMBEDDED LOGS */}
         {!data.activeEvent ? (
           <View style={styles.idleState}>
             <TouchableOpacity style={styles.primaryButton} onPress={() => navigation.navigate('NewEvent', { userId })}>
@@ -115,11 +155,10 @@ export default function WorkerDashboardScreen({ navigation, route }: Props) {
                 <Text style={styles.actionBtnText}>+ Ride</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.stopBtn} onPress={stopActiveEvent}>
+            <TouchableOpacity style={styles.stopBtn} onPress={promptStopEvent}>
               <Text style={styles.stopBtnText}>Stop Event & Calculate Days</Text>
             </TouchableOpacity>
 
-            {/* NESTED ACTIVE LOGS */}
             {data.activeEvent.expenses.length > 0 && (
               <View style={styles.nestedLogsContainer}>
                 <Text style={styles.sectionTitleSmall}>CURRENT SHIFT LOGS</Text>
@@ -142,34 +181,25 @@ export default function WorkerDashboardScreen({ navigation, route }: Props) {
           ))
         }
 
-        <Text style={styles.sectionTitle}>Settled Wage Logs</Text>
-        {settledWageEvents.length === 0 ? <Text style={styles.emptyText}>No settled history yet.</Text> : 
-          settledWageEvents.map((event: any) => (
-            <TouchableOpacity key={event.id} style={styles.historyCard} onPress={() => navigation.navigate('ManageEvent', { event, userId })}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.historyEventName}>{event.eventName}</Text>
-                <Text style={styles.historySub}>{new Date(event.endDate).toLocaleDateString()}</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={styles.historyAmount}>{event.totalDaysWorked} Days</Text>
-                {event.wageSettlementReceipt && (
-                  <TouchableOpacity onPress={() => setSelectedProof(event.wageSettlementReceipt)} style={styles.proofBtn}>
-                    <MaterialIcons name="visibility" size={12} color="#000" />
-                    <Text style={styles.proofBtnText}>View Receipt</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </TouchableOpacity>
-          ))
-        }
+        <TouchableOpacity style={styles.viewHistoryBtn} onPress={() => navigation.navigate('WorkerHistory', { userId })}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <MaterialIcons name="account-balance-wallet" size={20} color="#CCFF00" style={{ marginRight: 10 }} />
+            <Text style={styles.viewHistoryBtnText}>View Settled History & Receipts</Text>
+          </View>
+          <MaterialIcons name="arrow-forward-ios" size={16} color="#555" />
+        </TouchableOpacity>
       </ScrollView>
 
-      <Modal visible={!!selectedProof} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.closeModalBtn} onPress={() => setSelectedProof(null)}><MaterialIcons name="close" size={32} color="#FFF" /></TouchableOpacity>
-          {selectedProof && <Image source={{ uri: selectedProof }} style={styles.fullScreenImage} />}
-        </View>
-      </Modal>
+      {/* Custom Alert Mounted Here */}
+      <CustomAlert 
+        visible={alertConfig.visible} 
+        title={alertConfig.title} 
+        message={alertConfig.message} 
+        type={alertConfig.type} 
+        onConfirm={alertConfig.onConfirm} 
+        onCancel={alertConfig.onCancel}
+        confirmText={alertConfig.type === 'confirm' ? "Confirm Stop" : "OK"}
+      />
     </View>
   );
 }
@@ -209,7 +239,6 @@ const styles = StyleSheet.create({
   historyCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1A1A1A', padding: 15, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: '#222' },
   historyEventName: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   historySub: { color: '#888', fontSize: 12, marginTop: 4 },
-  historyAmount: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
 
   logItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#222' },
   logLeft: { flexDirection: 'row', alignItems: 'center' },
@@ -219,9 +248,6 @@ const styles = StyleSheet.create({
   logRight: { alignItems: 'flex-end' },
   logAmount: { color: '#FFF', fontSize: 14, fontWeight: 'bold' },
   
-  proofBtn: { backgroundColor: '#CCFF00', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 6 },
-  proofBtnText: { color: '#000', fontSize: 10, fontWeight: 'bold', marginLeft: 4 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
-  closeModalBtn: { position: 'absolute', top: 50, right: 20, zIndex: 10, padding: 15 },
-  fullScreenImage: { width: '90%', height: '80%', resizeMode: 'contain' }
+  viewHistoryBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#1A1A1A', padding: 20, borderRadius: 12, marginTop: 15, borderWidth: 1, borderColor: '#333' },
+  viewHistoryBtnText: { color: '#FFF', fontSize: 14, fontWeight: 'bold' }
 });

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
+import CustomAlert from '../components/CustomAlert';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'RegisterUser'>;
@@ -16,18 +17,29 @@ export default function RegisterUserScreen({ navigation }: Props) {
   const [role, setRole] = useState<'WORKER' | 'MANAGER'>('WORKER');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Custom Alert State
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false, title: '', message: '', type: 'success' as 'success'|'error',
+    onConfirm: () => hideAlert()
+  });
+  const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
+
   const handleRegister = async () => {
-    if (!fullName || !email || !password) return Alert.alert('Required', 'Name, email, and password are required.');
+    if (!fullName || !email || !password) {
+      return setAlertConfig({ visible: true, title: 'Required', message: 'Name, email, and password are required.', type: 'error', onConfirm: hideAlert });
+    }
 
     setIsLoading(true);
     try {
       await axios.post('https://magna-payment-api.onrender.com/api/users/register', {
         fullName, email, password, role
       });
-      Alert.alert('Success', `${fullName} has been added to the system.`);
-      navigation.goBack();
+      setAlertConfig({
+        visible: true, title: 'Success', message: `${fullName} has been added to the system.`, type: 'success',
+        onConfirm: () => { hideAlert(); navigation.goBack(); }
+      });
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.response?.data?.error || 'Server error.');
+      setAlertConfig({ visible: true, title: 'Registration Failed', message: error.response?.data?.error || 'Server error.', type: 'error', onConfirm: hideAlert });
     } finally {
       setIsLoading(false);
     }
@@ -75,6 +87,15 @@ export default function RegisterUserScreen({ navigation }: Props) {
           {isLoading ? <ActivityIndicator color="#000" /> : <Text style={styles.submitBtnText}>Register User</Text>}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Custom Alert Mounted Here */}
+      <CustomAlert 
+        visible={alertConfig.visible} 
+        title={alertConfig.title} 
+        message={alertConfig.message} 
+        type={alertConfig.type} 
+        onConfirm={alertConfig.onConfirm} 
+      />
     </View>
   );
 }
