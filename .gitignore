@@ -38,4 +38,4 @@ yarn-error.*
 # generated native folders
 /ios
 /android
-.mobile-app/google-services.json
+.google-services.json
