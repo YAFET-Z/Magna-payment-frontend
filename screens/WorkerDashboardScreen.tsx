@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, RefreshControl } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -8,7 +8,6 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import CustomAlert from '../components/CustomAlert';
 
-// Handle notifications dynamically while app is open
 Notifications.setNotificationHandler({
   handleNotification: async () => ({ shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false }),
 });
@@ -21,26 +20,38 @@ type Props = {
 export default function WorkerDashboardScreen({ navigation, route }: Props) {
   const { userId } = route.params;
   const [data, setData] = useState<any>(null);
+  
+  // NEW: Refresh State
+  const [refreshing, setRefreshing] = useState(false);
 
-  // NEW: Custom Alert State for Confirmations
   const [alertConfig, setAlertConfig] = useState({
     visible: false, title: '', message: '', type: 'success' as 'success'|'error'|'confirm',
     onConfirm: () => hideAlert(), onCancel: () => hideAlert()
   });
   const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
 
-  const fetchDashboard = () => {
-    axios.get(`https://magna-payment-api.onrender.com/api/worker/dashboard/${userId}`)
-      .then(res => setData(res.data))
-      .catch(err => console.log('Dashboard GET Error:', err.message));
+  const fetchDashboard = async () => {
+    try {
+      const res = await axios.get(`https://magna-payment-api.onrender.com/api/worker/dashboard/${userId}`);
+      setData(res.data);
+    } catch (err: any) {
+      console.log('Dashboard GET Error:', err.message);
+    }
   };
+
+  // NEW: Pull-to-Refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchDashboard();
+    setRefreshing(false);
+  }, [userId]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', fetchDashboard);
     return unsubscribe;
   }, [navigation, userId]);
 
-  // NEW: Push Notification Registration
+  // FIXED: Push Notification Registration for EAS Builds
   useEffect(() => {
     async function registerForPushNotificationsAsync() {
       if (Device.isDevice) {
@@ -53,9 +64,15 @@ export default function WorkerDashboardScreen({ navigation, route }: Props) {
         if (finalStatus !== 'granted') return;
         
         try {
-          const token = (await Notifications.getExpoPushTokenAsync()).data;
+          // EXPO REQUIRES THE PROJECT ID FOR STANDALONE APK BUILDS
+          const token = (await Notifications.getExpoPushTokenAsync({
+            projectId: "7b12b73b-72be-4ac5-b72c-6d356d3173ec"
+          })).data;
+          
           await axios.put(`https://magna-payment-api.onrender.com/api/users/push-token/${userId}`, { token });
-        } catch (e) { console.log('Failed to fetch push token'); }
+        } catch (e) { 
+          console.log('Failed to fetch push token:', e); 
+        }
       }
     }
     registerForPushNotificationsAsync();
@@ -63,7 +80,6 @@ export default function WorkerDashboardScreen({ navigation, route }: Props) {
 
   const handleLogout = () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
 
-  // UPDATED: Using CustomAlert for Stop Event Confirmation
   const promptStopEvent = () => {
     setAlertConfig({
       visible: true,
@@ -128,7 +144,12 @@ export default function WorkerDashboardScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+      {/* NEW: RefreshControl attached to ScrollView */}
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={{ paddingBottom: 80 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#CCFF00" />}
+      >
         
         {!data.activeEvent ? (
           <View style={styles.idleState}>
@@ -190,7 +211,6 @@ export default function WorkerDashboardScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Custom Alert Mounted Here */}
       <CustomAlert 
         visible={alertConfig.visible} 
         title={alertConfig.title} 

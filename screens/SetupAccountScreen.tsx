@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import axios from 'axios';
+import CustomAlert from '../components/CustomAlert';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'SetupAccount'>;
@@ -19,12 +20,19 @@ export default function SetupAccountScreen({ navigation, route }: Props) {
   const [telebirr, setTelebirr] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // NEW: Custom Alert State
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false, title: '', message: '', type: 'success' as 'success'|'error',
+    onConfirm: () => hideAlert()
+  });
+  const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
+
   const handleSetup = async () => {
     if (!password || password !== confirmPassword) {
-      return Alert.alert('Error', 'Passwords must match and cannot be empty.');
+      return setAlertConfig({ visible: true, title: 'Error', message: 'Passwords must match and cannot be empty.', type: 'error', onConfirm: hideAlert });
     }
     if (isWorker && !bankAccount && !telebirr) {
-       return Alert.alert('Required', 'Please provide at least one payout method (Bank Account or Telebirr).');
+       return setAlertConfig({ visible: true, title: 'Required', message: 'Please provide at least one payout method (Bank Account or Telebirr).', type: 'error', onConfirm: hideAlert });
     }
 
     setIsLoading(true);
@@ -33,14 +41,19 @@ export default function SetupAccountScreen({ navigation, route }: Props) {
         password, bankAccount: isWorker ? bankAccount : null, telebirr: isWorker ? telebirr : null
       });
       
-      Alert.alert('Success', 'Your account is ready.');
-      if (role === 'MANAGER') {
-        navigation.replace('ManagerPortal', { adminId: userId });
-      } else {
-        navigation.replace('WorkerDashboard', { userId });
-      }
+      setAlertConfig({
+        visible: true, title: 'Success', message: 'Your account is ready.', type: 'success',
+        onConfirm: () => {
+          hideAlert();
+          if (role === 'MANAGER') {
+            navigation.replace('ManagerPortal', { adminId: userId });
+          } else {
+            navigation.replace('WorkerDashboard', { userId });
+          }
+        }
+      });
     } catch (error: any) {
-      Alert.alert('Setup Failed', error.response?.data?.error || 'Server error.');
+      setAlertConfig({ visible: true, title: 'Setup Failed', message: error.response?.data?.error || 'Server error.', type: 'error', onConfirm: hideAlert });
     } finally {
       setIsLoading(false);
     }
@@ -72,6 +85,15 @@ export default function SetupAccountScreen({ navigation, route }: Props) {
           {isLoading ? <ActivityIndicator color="#000" /> : <Text style={styles.submitBtnText}>Complete Setup  →</Text>}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Custom Alert Mounted Here */}
+      <CustomAlert 
+        visible={alertConfig.visible} 
+        title={alertConfig.title} 
+        message={alertConfig.message} 
+        type={alertConfig.type} 
+        onConfirm={alertConfig.onConfirm} 
+      />
     </View>
   );
 }
