@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
+import CustomAlert from '../components/CustomAlert'; // NEW
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ManagerWorkerPayroll'>;
@@ -14,10 +15,16 @@ type Props = {
 export default function ManagerWorkerPayrollScreen({ navigation, route }: Props) {
   const { workerName, events, dailyWage, bankAccount, telebirr } = route.params;
   
-  // NEW: State for bulk selection
   const [selectedEventIds, setSelectedEventIds] = useState<string[]>([]);
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+
+  // NEW: Custom Alert State
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false, title: '', message: '', type: 'success' as 'success'|'error',
+    onConfirm: () => hideAlert()
+  });
+  const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
 
   const totalDays = events.reduce((sum, ev) => sum + ev.totalDaysWorked, 0);
   const totalAmount = totalDays * dailyWage;
@@ -29,7 +36,9 @@ export default function ManagerWorkerPayrollScreen({ navigation, route }: Props)
   };
 
   const handleBulkSettle = async () => {
-    if (selectedEventIds.length === 0) return Alert.alert('Error', 'Please select at least one event to settle.');
+    if (selectedEventIds.length === 0) {
+      return setAlertConfig({ visible: true, title: 'Error', message: 'Please select at least one event to settle.', type: 'error', onConfirm: hideAlert });
+    }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -44,10 +53,15 @@ export default function ManagerWorkerPayrollScreen({ navigation, route }: Props)
           eventIds: selectedEventIds,
           wageSettlementBase64: result.assets[0].base64
         });
-        Alert.alert('Success', `Selected wages for ${workerName} have been settled.`);
-        navigation.reset({ index: 0, routes: [{ name: 'Login' }, { name: 'ManagerPortal', params: { adminId: 'manager' } }] });
+        setAlertConfig({
+          visible: true, title: 'Success', message: `Selected wages for ${workerName} have been settled.`, type: 'success',
+          onConfirm: () => {
+            hideAlert();
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }, { name: 'ManagerPortal', params: { adminId: 'manager' } }] });
+          }
+        });
       } catch (error: any) {
-        Alert.alert('Settlement Failed', error.response?.data?.error || 'Server error.');
+        setAlertConfig({ visible: true, title: 'Settlement Failed', message: error.response?.data?.error || 'Server error.', type: 'error', onConfirm: hideAlert });
       } finally {
         setIsUploading(false);
       }
@@ -65,7 +79,6 @@ export default function ManagerWorkerPayrollScreen({ navigation, route }: Props)
         onPress={() => {
           if (isBulkMode) toggleEventSelection(event.id);
           else {
-            // FIXED: Removed the 's' in 'ManagerWageSettlement'
             navigation.navigate('ManagerWageSettlement', { 
               eventId: event.id, eventName: event.eventName, workerName, 
               totalAmount: eventAmount, bankAccount, telebirr, 
@@ -130,6 +143,14 @@ export default function ManagerWorkerPayrollScreen({ navigation, route }: Props)
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      <CustomAlert 
+        visible={alertConfig.visible} 
+        title={alertConfig.title} 
+        message={alertConfig.message} 
+        type={alertConfig.type} 
+        onConfirm={alertConfig.onConfirm} 
+      />
     </View>
   );
 }

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import axios from 'axios';
+import CustomAlert from '../components/CustomAlert'; // NEW
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ManagerWorkerReview'>;
@@ -12,7 +13,6 @@ type Props = {
 
 export default function ManagerWorkerReviewScreen({ navigation, route }: Props) {
   const { workerId, workerName, totalAmount } = route.params;
-  
   const safeTotalAmount = totalAmount || 0;
   
   const [activeTab, setActiveTab] = useState<'PENDING' | 'HISTORY_EXPENSES' | 'HISTORY_EVENTS'>('PENDING');
@@ -25,6 +25,13 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
+  // NEW: Custom Alert State
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false, title: '', message: '', type: 'success' as 'success'|'error',
+    onConfirm: () => hideAlert()
+  });
+  const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
+
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       setIsLoading(true);
@@ -34,7 +41,6 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
       ])
       .then(([expenseRes, dashboardRes]) => {
         const allExpenses = expenseRes.data.expenses || [];
-        
         setPendingExpenses(allExpenses.filter((e: any) => e.status === 'PENDING'));
         
         const settledExps = allExpenses.filter((e: any) => e.status === 'SETTLED');
@@ -72,17 +78,14 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
   }, [navigation, workerId]);
 
   const handleGoToSettlement = () => {
-    if (safeTotalAmount <= 0) return Alert.alert('Notice', 'No pending balance to settle.');
+    if (safeTotalAmount <= 0) {
+      return setAlertConfig({ visible: true, title: 'Notice', message: 'No pending balance to settle.', type: 'error', onConfirm: hideAlert });
+    }
     navigation.navigate('ManagerSettlement', { workerId, workerName, totalAmount: safeTotalAmount, bankAccount, telebirr });
   };
 
-  // UPDATED: Now navigates directly to ManageExpenseScreen for detail viewing
   const renderExpenseItem = (item: any, isSettled: boolean = false) => (
-    <TouchableOpacity 
-      key={item.id} 
-      style={styles.listRow}
-      onPress={() => navigation.navigate('ManageExpense', { expense: item, userId: workerId })}
-    >
+    <TouchableOpacity key={item.id} style={styles.listRow} onPress={() => navigation.navigate('ManageExpense', { expense: item, userId: workerId })}>
       <View style={styles.listLeft}>
         <View style={styles.iconBox}>
           <MaterialIcons name={item.expenseType === 'MEAL' ? 'restaurant' : 'directions-car'} size={18} color="#CCFF00" />
@@ -227,6 +230,14 @@ export default function ManagerWorkerReviewScreen({ navigation, route }: Props) 
           {selectedImage && <Image source={{ uri: selectedImage }} style={styles.fullScreenImage} />}
         </View>
       </Modal>
+
+      <CustomAlert 
+        visible={alertConfig.visible} 
+        title={alertConfig.title} 
+        message={alertConfig.message} 
+        type={alertConfig.type} 
+        onConfirm={alertConfig.onConfirm} 
+      />
     </View>
   );
 }

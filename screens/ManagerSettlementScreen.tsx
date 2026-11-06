@@ -4,6 +4,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard'; // NEW
 import axios from 'axios';
 import CustomAlert from '../components/CustomAlert';
 
@@ -23,6 +24,13 @@ export default function ManagerSettlementScreen({ navigation, route }: Props) {
     onConfirm: () => hideAlert()
   });
   const hideAlert = () => setAlertConfig(prev => ({ ...prev, visible: false }));
+
+  // NEW: Copy to Clipboard Function
+  const copyToClipboard = async (text: string | null) => {
+    if (!text) return;
+    await Clipboard.setStringAsync(text);
+    setAlertConfig({ visible: true, title: 'Copied!', message: 'Number copied to clipboard.', type: 'success', onConfirm: hideAlert });
+  };
 
   const handleImagePick = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -77,14 +85,32 @@ export default function ManagerSettlementScreen({ navigation, route }: Props) {
         <Text style={styles.label}>PAYOUT DESTINATIONS</Text>
         <View style={styles.bankCard}>
           <View style={styles.bankRow}>
-            <MaterialIcons name="account-balance" size={20} color="#888" />
-            <Text style={styles.bankText}>Bank Account:</Text>
-            <Text style={styles.bankValue}>{bankAccount || 'Not Provided'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <MaterialIcons name="account-balance" size={20} color="#888" />
+              <Text style={styles.bankText}>Bank Account:</Text>
+            </View>
+            <View style={styles.copyRow}>
+              <Text style={styles.bankValue}>{bankAccount || 'Not Provided'}</Text>
+              {bankAccount && (
+                <TouchableOpacity onPress={() => copyToClipboard(bankAccount)} style={styles.copyIcon}>
+                  <MaterialIcons name="content-copy" size={16} color="#CCFF00" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
           <View style={styles.bankRow}>
-            <MaterialIcons name="phone-android" size={20} color="#888" />
-            <Text style={styles.bankText}>Telebirr:</Text>
-            <Text style={styles.bankValue}>{telebirr || 'Not Provided'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <MaterialIcons name="phone-android" size={20} color="#888" />
+              <Text style={styles.bankText}>Telebirr:</Text>
+            </View>
+            <View style={styles.copyRow}>
+              <Text style={styles.bankValue}>{telebirr || 'Not Provided'}</Text>
+              {telebirr && (
+                <TouchableOpacity onPress={() => copyToClipboard(telebirr)} style={styles.copyIcon}>
+                  <MaterialIcons name="content-copy" size={16} color="#CCFF00" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         </View>
 
@@ -126,9 +152,11 @@ const styles = StyleSheet.create({
   amountText: { color: '#FFF', fontSize: 44, fontWeight: 'bold', marginBottom: 20 },
   currencyText: { color: '#CCFF00', fontSize: 20 },
   bankCard: { backgroundColor: '#1A1A1A', padding: 20, borderRadius: 16, marginBottom: 30, borderWidth: 1, borderColor: '#222' },
-  bankRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 8 },
-  bankText: { color: '#888', fontSize: 14, marginLeft: 10, width: 100 },
-  bankValue: { color: '#FFF', fontSize: 16, fontWeight: 'bold', flex: 1, textAlign: 'right' },
+  bankRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 8 },
+  bankText: { color: '#888', fontSize: 14, marginLeft: 10 },
+  copyRow: { flexDirection: 'row', alignItems: 'center' },
+  bankValue: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'right' },
+  copyIcon: { marginLeft: 10, padding: 4 },
   imageUploadBox: { backgroundColor: '#1A1A1A', borderRadius: 16, borderWidth: 1, borderColor: '#222', borderStyle: 'dashed', height: 250, marginBottom: 25, overflow: 'hidden' },
   placeholderBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   placeholderText: { color: '#555', marginTop: 10, fontSize: 14, fontWeight: 'bold' },
