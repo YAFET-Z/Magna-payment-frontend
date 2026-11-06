@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Image, RefreshControl } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -13,25 +13,40 @@ export default function ManagerPortalScreen({ navigation }: Props) {
   const [wageWorkers, setWageWorkers] = useState([]);
   const [allWorkers, setAllWorkers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // NEW: Refresh State
+  const [refreshing, setRefreshing] = useState(false);
+
+  // NEW: Extracted fetch logic so it can be reused by both useEffect and onRefresh
+  const fetchDashboardData = async () => {
+    try {
+      const [expRes, wageRes, allRes] = await Promise.all([
+        axios.get('https://magna-payment-api.onrender.com/api/finance/company-pending-expenses'), 
+        axios.get('https://magna-payment-api.onrender.com/api/finance/company-pending-wages'),
+        axios.get('https://magna-payment-api.onrender.com/api/finance/all-workers')
+      ]);
+      setExpenseWorkers(expRes.data.actionNeeded || []);
+      setWageWorkers(wageRes.data || []);
+      setAllWorkers(allRes.data || []);
+    } catch (err: any) {
+      console.log('Fetch Error:', err.message);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       setIsLoading(true);
-      Promise.all([
-        axios.get('https://magna-payment-api.onrender.com/api/finance/company-pending-expenses'), 
-        axios.get('https://magna-payment-api.onrender.com/api/finance/company-pending-wages'),
-        axios.get('https://magna-payment-api.onrender.com/api/finance/all-workers')
-      ])
-      .then(([expRes, wageRes, allRes]) => {
-        setExpenseWorkers(expRes.data.actionNeeded || []);
-        setWageWorkers(wageRes.data || []);
-        setAllWorkers(allRes.data || []);
-      })
-      .catch(err => console.log('Fetch Error:', err.message))
-      .finally(() => setIsLoading(false));
+      fetchDashboardData().finally(() => setIsLoading(false));
     });
     return unsubscribe;
   }, [navigation]);
+
+  // NEW: Pull-to-Refresh handler
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchDashboardData();
+    setRefreshing(false);
+  }, []);
 
   const getInitials = (name: string) => name ? name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2) : 'W';
 
@@ -160,12 +175,14 @@ export default function ManagerPortalScreen({ navigation }: Props) {
         <Text style={styles.countBadge}>{getListData().length}</Text>
       </View>
       
+      {/* NEW: RefreshControl attached to FlatList */}
       <FlatList 
         data={getListData()} 
         renderItem={activeTab === 'EXPENSES' ? renderExpenseCard : (activeTab === 'WAGES' ? renderWageWorkerCard : renderAllWorkerCard)} 
         keyExtractor={(item: any) => item.id} 
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#CCFF00" />}
       />
     </View>
   );
